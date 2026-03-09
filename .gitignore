@@ -1,0 +1,5 @@
+dist/
+.bin/pw-driver.zip
+.bin/wrappe.exe
+*.exe
+node_modules/
