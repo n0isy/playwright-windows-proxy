@@ -14,9 +14,17 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Extract Playwright version from tag
+        id: version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          $pw = ($tag -split '\.')[0..2] -join '.'
+          echo "pw_version=$pw" >> $env:GITHUB_OUTPUT
+
       - name: Build
         shell: pwsh
-        run: .bin/build.ps1
+        run: .bin/build.ps1 -PwVersion ${{ steps.version.outputs.pw_version }}
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
