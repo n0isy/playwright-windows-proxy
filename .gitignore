@@ -1,6 +1,6 @@
 .idea/
-dist/
+.bin/dist/
 .bin/pw-driver.zip
 .bin/wrappe.exe
-*.exe
+.bin/playwright-proxy.exe
 node_modules/
