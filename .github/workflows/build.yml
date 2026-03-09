@@ -14,16 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract version from tag
-        id: version
-        shell: pwsh
-        run: |
-          $version = "${{ github.ref_name }}" -replace '^v', ''
-          echo "pw_version=$version" >> $env:GITHUB_OUTPUT
-
       - name: Build
         shell: pwsh
-        run: .bin/build.ps1 -PwVersion ${{ steps.version.outputs.pw_version }}
+        run: .bin/build.ps1
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
