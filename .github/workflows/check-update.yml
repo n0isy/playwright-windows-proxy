@@ -1,4 +1,4 @@
-name: Check Playwright Update
+name: Check Playwright MCP Update
 
 on:
   schedule:
@@ -16,57 +16,66 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get Playwright version used by @playwright/mcp
+      - name: Get latest @playwright/mcp version
         id: upstream
         run: |
-          # Track the Playwright version that @playwright/mcp actually uses,
-          # not the stable playwright package (MCP often ships with alpha builds)
-          RAW=$(npm view @playwright/mcp dependencies.playwright)
-          # Strip any prerelease suffix (-alpha-xxx) to get the base version
-          LATEST=$(echo "$RAW" | sed 's/-.*//')
-          echo "version=$LATEST" >> "$GITHUB_OUTPUT"
-          echo "@playwright/mcp uses playwright: $RAW (base: $LATEST)"
+          MCP=$(npm view @playwright/mcp version)
+          PW=$(npm view @playwright/mcp dependencies.playwright)
+          echo "mcp=$MCP" >> "$GITHUB_OUTPUT"
+          echo "pw=$PW" >> "$GITHUB_OUTPUT"
+          echo "@playwright/mcp: $MCP (bundles playwright: $PW)"
 
       - name: Get latest tag in this repo
         id: local
         run: |
-          TAG=$(git tag --sort=-v:refname | head -n1)
-          LOCAL=${TAG#v}
-          # Extract first 3 segments to match npm semver (tags may have 4: 1.58.2.4)
-          PW_LOCAL=$(echo "$LOCAL" | cut -d. -f1-3)
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$PW_LOCAL" >> "$GITHUB_OUTPUT"
-          echo "Local tag: $TAG (pw version: $PW_LOCAL)"
+          TAG=$(git tag --sort=-v:refname | head -n1 || true)
+          if [ -z "$TAG" ]; then
+            echo "version=" >> "$GITHUB_OUTPUT"
+            echo "No tags found"
+          else
+            # Extract MCP part (first 3 segments) from tag like v0.0.68.0
+            LOCAL=$(echo "${TAG#v}" | cut -d. -f1-3)
+            echo "version=$LOCAL" >> "$GITHUB_OUTPUT"
+            echo "Local tag: $TAG (mcp version: $LOCAL)"
+          fi
 
       - name: Compare and tag if newer
         env:
-          UPSTREAM: ${{ steps.upstream.outputs.version }}
+          MCP: ${{ steps.upstream.outputs.mcp }}
+          PW: ${{ steps.upstream.outputs.pw }}
           LOCAL: ${{ steps.local.outputs.version }}
         run: |
-          echo "Upstream: $UPSTREAM  Local: $LOCAL"
-          if [ "$UPSTREAM" = "$LOCAL" ]; then
+          echo "Upstream MCP: $MCP  Local: $LOCAL"
+          if [ "$MCP" = "$LOCAL" ]; then
             echo "Already up to date."
             exit 0
           fi
 
-          # Compare semver: only tag if upstream is strictly newer
-          printf '%s\n%s\n' "$LOCAL" "$UPSTREAM" | sort -V | tail -n1 | grep -qx "$UPSTREAM" || {
-            echo "Upstream is not newer, skipping."
-            exit 0
-          }
+          if [ -n "$LOCAL" ]; then
+            printf '%s\n%s\n' "$LOCAL" "$MCP" | sort -V | tail -n1 | grep -qx "$MCP" || {
+              echo "Upstream is not newer, skipping."
+              exit 0
+            }
+          fi
 
-          echo "New version detected: $UPSTREAM"
+          echo "New MCP version: $MCP (playwright: $PW)"
 
-          # Verify the driver zip exists on CDN before tagging
-          URL="https://playwright.azureedge.net/builds/driver/playwright-${UPSTREAM}-win32_x64.zip"
+          # Alpha builds are under /next/, stable under /driver/
+          if echo "$PW" | grep -q 'alpha'; then
+            CDN="https://playwright.azureedge.net/builds/driver/next"
+          else
+            CDN="https://playwright.azureedge.net/builds/driver"
+          fi
+
+          URL="${CDN}/playwright-${PW}-win32_x64.zip"
           HTTP=$(curl -sLo /dev/null -w '%{http_code}' "$URL")
           if [ "$HTTP" != "200" ]; then
             echo "Driver not available yet at $URL (HTTP $HTTP), skipping."
             exit 0
           fi
-          echo "Driver confirmed available (HTTP $HTTP)"
+          echo "Driver confirmed at $URL (HTTP $HTTP)"
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "v${UPSTREAM}"
-          git push origin "v${UPSTREAM}"
+          git tag "v${MCP}.0"
+          git push origin "v${MCP}.0"

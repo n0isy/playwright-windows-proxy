@@ -1,5 +1,5 @@
 param(
-    [string]$PwVersion = "1.58.2"
+    [Parameter(Mandatory)][string]$PwVersion
 )
 
 $ErrorActionPreference = "Stop"
@@ -9,9 +9,15 @@ $Bin = $PSScriptRoot
 $Dist = Join-Path $Bin "dist"
 $Output = Join-Path $Bin "playwright-proxy.exe"
 $PwPlatform = "win32_x64"
-$PwCdn = "https://playwright.azureedge.net/builds/driver"
 $WrappeVersion = "1.0.4"
 $WrappeCdn = "https://github.com/Systemcluster/wrappe/releases/download/v$WrappeVersion"
+
+# Alpha builds are under /next/, stable under /driver/
+if ($PwVersion -match 'alpha') {
+    $PwCdn = "https://playwright.azureedge.net/builds/driver/next"
+} else {
+    $PwCdn = "https://playwright.azureedge.net/builds/driver"
+}
 
 Write-Host "[1/5] Cleaning..." -ForegroundColor Cyan
 if (Test-Path $Dist) { Remove-Item $Dist -Recurse -Force }
@@ -19,6 +25,7 @@ New-Item $Dist -ItemType Directory | Out-Null
 
 $DriverZip = Join-Path $Bin "pw-driver.zip"
 Write-Host "[2/5] Downloading Playwright driver v$PwVersion..." -ForegroundColor Cyan
+Write-Host "      CDN: $PwCdn" -ForegroundColor DarkGray
 curl.exe -L -o $DriverZip "$PwCdn/playwright-$PwVersion-$PwPlatform.zip"
 if ($LASTEXITCODE -ne 0) { throw "Failed to download Playwright driver" }
 

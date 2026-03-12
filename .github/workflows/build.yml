@@ -14,19 +14,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Extract Playwright version from tag
+      - name: Resolve Playwright version from MCP
         id: version
         shell: pwsh
         run: |
+          # Tag is v{mcp}.{patch} e.g. v0.0.68.0 → MCP version 0.0.68
           $tag = "${{ github.ref_name }}" -replace '^v', ''
-          $pw = ($tag -split '\.')[0..2] -join '.'
-          echo "pw_version=$pw" >> $env:GITHUB_OUTPUT
+          $mcp = ($tag -split '\.')[0..2] -join '.'
+          $pw = (npm view "@playwright/mcp@$mcp" dependencies.playwright)
+          echo "mcp=$mcp" >> $env:GITHUB_OUTPUT
+          echo "pw=$pw" >> $env:GITHUB_OUTPUT
+          Write-Host "MCP: $mcp → Playwright: $pw"
 
       - name: Build
         shell: pwsh
-        run: .bin/build.ps1 -PwVersion ${{ steps.version.outputs.pw_version }}
+        run: .bin/build.ps1 -PwVersion ${{ steps.version.outputs.pw }}
 
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
           files: .bin/playwright-proxy.exe
+          body: |
+            @playwright/mcp: `${{ steps.version.outputs.mcp }}`
+            Playwright driver: `${{ steps.version.outputs.pw }}`
