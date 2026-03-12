@@ -28,9 +28,11 @@ jobs:
         run: |
           TAG=$(git tag --sort=-v:refname | head -n1)
           LOCAL=${TAG#v}
+          # Extract first 3 segments to match npm semver (tags may have 4: 1.58.2.4)
+          PW_LOCAL=$(echo "$LOCAL" | cut -d. -f1-3)
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "version=$LOCAL" >> "$GITHUB_OUTPUT"
-          echo "Local tag: $TAG ($LOCAL)"
+          echo "version=$PW_LOCAL" >> "$GITHUB_OUTPUT"
+          echo "Local tag: $TAG (pw version: $PW_LOCAL)"
 
       - name: Compare and tag if newer
         env:
