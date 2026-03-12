@@ -16,6 +16,7 @@ const START_URL = process.env.PW_START_URL || 'about:blank';
       headless: HEADLESS,
       port: PORT,
       host: HOST,
+      wsPath: '/ws',
       _sharedBrowser: true,
     });
 
