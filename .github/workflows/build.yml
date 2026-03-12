@@ -4,6 +4,11 @@ on:
   push:
     tags:
       - "v*"
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -11,6 +16,8 @@ permissions:
 jobs:
   build:
     runs-on: windows-latest
+    env:
+      TAG: ${{ inputs.tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
 
@@ -19,7 +26,7 @@ jobs:
         shell: pwsh
         run: |
           # Tag is v{mcp}.{patch} e.g. v0.0.68.0 → MCP version 0.0.68
-          $tag = "${{ github.ref_name }}" -replace '^v', ''
+          $tag = "$env:TAG" -replace '^v', ''
           $mcp = ($tag -split '\.')[0..2] -join '.'
           $pw = (npm view "@playwright/mcp@$mcp" dependencies.playwright)
           echo "mcp=$mcp" >> $env:GITHUB_OUTPUT
@@ -33,6 +40,7 @@ jobs:
       - name: Upload to Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.TAG }}
           files: .bin/playwright-proxy.exe
           body: |
             @playwright/mcp: `${{ steps.version.outputs.mcp }}`

@@ -11,6 +11,8 @@ permissions:
 jobs:
   check:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.compare.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,13 +35,13 @@ jobs:
             echo "version=" >> "$GITHUB_OUTPUT"
             echo "No tags found"
           else
-            # Extract MCP part (first 3 segments) from tag like v0.0.68.0
             LOCAL=$(echo "${TAG#v}" | cut -d. -f1-3)
             echo "version=$LOCAL" >> "$GITHUB_OUTPUT"
             echo "Local tag: $TAG (mcp version: $LOCAL)"
           fi
 
       - name: Compare and tag if newer
+        id: compare
         env:
           MCP: ${{ steps.upstream.outputs.mcp }}
           PW: ${{ steps.upstream.outputs.pw }}
@@ -75,7 +77,16 @@ jobs:
           fi
           echo "Driver confirmed at $URL (HTTP $HTTP)"
 
+          NEW_TAG="v${MCP}.0"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git tag "v${MCP}.0"
-          git push origin "v${MCP}.0"
+          git tag "$NEW_TAG"
+          git push origin "$NEW_TAG"
+          echo "tag=$NEW_TAG" >> "$GITHUB_OUTPUT"
+
+  build:
+    needs: check
+    if: needs.check.outputs.tag != ''
+    uses: ./.github/workflows/build.yml
+    with:
+      tag: ${{ needs.check.outputs.tag }}
