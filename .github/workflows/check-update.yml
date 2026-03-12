@@ -16,12 +16,16 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Get latest Playwright version from npm
+      - name: Get Playwright version used by @playwright/mcp
         id: upstream
         run: |
-          LATEST=$(npm view playwright version)
+          # Track the Playwright version that @playwright/mcp actually uses,
+          # not the stable playwright package (MCP often ships with alpha builds)
+          RAW=$(npm view @playwright/mcp dependencies.playwright)
+          # Strip any prerelease suffix (-alpha-xxx) to get the base version
+          LATEST=$(echo "$RAW" | sed 's/-.*//')
           echo "version=$LATEST" >> "$GITHUB_OUTPUT"
-          echo "Upstream Playwright: $LATEST"
+          echo "@playwright/mcp uses playwright: $RAW (base: $LATEST)"
 
       - name: Get latest tag in this repo
         id: local
@@ -52,6 +56,16 @@ jobs:
           }
 
           echo "New version detected: $UPSTREAM"
+
+          # Verify the driver zip exists on CDN before tagging
+          URL="https://playwright.azureedge.net/builds/driver/playwright-${UPSTREAM}-win32_x64.zip"
+          HTTP=$(curl -sLo /dev/null -w '%{http_code}' "$URL")
+          if [ "$HTTP" != "200" ]; then
+            echo "Driver not available yet at $URL (HTTP $HTTP), skipping."
+            exit 0
+          fi
+          echo "Driver confirmed available (HTTP $HTTP)"
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git tag "v${UPSTREAM}"
