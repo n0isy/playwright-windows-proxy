@@ -49,10 +49,42 @@ Pop-Location
 $NodeModules = Join-Path $Dist "node_modules"
 New-Item $NodeModules -ItemType Directory | Out-Null
 
-# Symlink playwright-core → the driver's package/ dir (avoid duplicating 13MB)
-$PcSrc = Join-Path $Dist "package"
+# Shim playwright-core → reuse driver's package/ (avoid duplicating 13MB)
 $PcDst = Join-Path $NodeModules "playwright-core"
-Copy-Item $PcSrc $PcDst -Recurse
+New-Item $PcDst -ItemType Directory | Out-Null
+Set-Content (Join-Path $PcDst "index.js") "module.exports = require('../../package');"
+# Build a minimal package.json (no exports → Node uses filesystem resolution)
+$PcPkgOrig = Get-Content (Join-Path (Join-Path $Dist "package") "package.json") -Raw | ConvertFrom-Json
+$PcPkgShim = @{}
+$PcPkgShim["name"] = $PcPkgOrig.name
+$PcPkgShim["version"] = $PcPkgOrig.version
+$PcPkgShim["main"] = "./index.js"
+$PcPkgShim | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $PcDst "package.json")
+# Create lib/ shims for subpath requires (e.g. require('playwright-core/lib/mcpBundle'))
+$PcLibDst = Join-Path $PcDst "lib"
+New-Item $PcLibDst -ItemType Directory | Out-Null
+$PcLibSrc = Join-Path (Join-Path $Dist "package") "lib"
+Get-ChildItem $PcLibSrc -Filter "*.js" | ForEach-Object {
+    Set-Content (Join-Path $PcLibDst $_.Name) "module.exports = require('../../../package/lib/$($_.Name)');"
+}
+# Also shim lib/server/ subdirectory
+$PcServerSrc = Join-Path $PcLibSrc "server"
+if (Test-Path $PcServerSrc) {
+    $PcServerDst = Join-Path $PcLibDst "server"
+    New-Item $PcServerDst -ItemType Directory | Out-Null
+    Get-ChildItem $PcServerSrc -Filter "*.js" | ForEach-Object {
+        Set-Content (Join-Path $PcServerDst $_.Name) "module.exports = require('../../../../package/lib/server/$($_.Name)');"
+    }
+    # Also shim lib/server/registry/
+    $PcRegSrc = Join-Path $PcServerSrc "registry"
+    if (Test-Path $PcRegSrc) {
+        $PcRegDst = Join-Path $PcServerDst "registry"
+        New-Item $PcRegDst -ItemType Directory | Out-Null
+        Get-ChildItem $PcRegSrc -Filter "*.js" | ForEach-Object {
+            Set-Content (Join-Path $PcRegDst $_.Name) "module.exports = require('../../../../../package/lib/server/registry/$($_.Name)');"
+        }
+    }
+}
 
 # Copy the full playwright npm package (4MB — has MCP, reporters, etc.)
 $PlSrc = Join-Path (Join-Path $TmpNpm "node_modules") "playwright"
@@ -64,16 +96,6 @@ $PlPkgJson = Join-Path $PlDst "package.json"
 $PlPkg = Get-Content $PlPkgJson -Raw | ConvertFrom-Json
 $PlPkg.exports | Add-Member -NotePropertyName "./*" -NotePropertyValue "./*" -Force
 $PlPkg | ConvertTo-Json -Depth 10 | Set-Content $PlPkgJson
-
-# Also patch playwright-core package.json exports
-$PcPkgJson = Join-Path $PcDst "package.json"
-if (Test-Path $PcPkgJson) {
-    $PcPkg = Get-Content $PcPkgJson -Raw | ConvertFrom-Json
-    if ($PcPkg.exports) {
-        $PcPkg.exports | Add-Member -NotePropertyName "./*" -NotePropertyValue "./*" -Force
-        $PcPkg | ConvertTo-Json -Depth 10 | Set-Content $PcPkgJson
-    }
-}
 
 # Clean up temp npm dir
 Remove-Item $TmpNpm -Recurse -Force
