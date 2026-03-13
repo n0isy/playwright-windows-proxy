@@ -99,7 +99,8 @@ $PlPkg | ConvertTo-Json -Depth 10 | Set-Content $PlPkgJson
 
 # Patch browserContextFactory.js: reuse existing context + don't close shared remote context
 $BcfPath = Join-Path (Join-Path (Join-Path (Join-Path $PlDst "lib") "mcp") "browser") "browserContextFactory.js"
-$Bcf = Get-Content $BcfPath -Raw
+# Normalize line endings to LF for consistent matching
+$Bcf = (Get-Content $BcfPath -Raw) -replace "`r`n", "`n"
 
 # Patch 1: RemoteContextFactory._doCreateContext — reuse existing context instead of newContext()
 $OldCreate = @'
@@ -119,6 +120,8 @@ $NewCreate = @'
 }
 class PersistentContextFactory
 '@
+$OldCreate = $OldCreate -replace "`r`n", "`n"
+$NewCreate = $NewCreate -replace "`r`n", "`n"
 if ($Bcf.Contains($OldCreate)) {
     $Bcf = $Bcf.Replace($OldCreate, $NewCreate)
     Write-Host "      Patched: RemoteContextFactory._doCreateContext" -ForegroundColor DarkGray
@@ -156,6 +159,8 @@ $NewClose = @'
     }
   }
 '@
+$OldClose = $OldClose -replace "`r`n", "`n"
+$NewClose = $NewClose -replace "`r`n", "`n"
 if ($Bcf.Contains($OldClose)) {
     $Bcf = $Bcf.Replace($OldClose, $NewClose)
     Write-Host "      Patched: BaseContextFactory._closeBrowserContext" -ForegroundColor DarkGray
