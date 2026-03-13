@@ -170,6 +170,45 @@ if ($Bcf.Contains($OldClose)) {
 
 Set-Content $BcfPath $Bcf -NoNewline
 
+# Patch 3: screenshot.js — remove filename param from schema
+$SsPath = Join-Path (Join-Path (Join-Path (Join-Path (Join-Path $PlDst "lib") "mcp") "browser") "tools") "screenshot.js"
+$Ss = (Get-Content $SsPath -Raw) -replace "`r`n", "`n"
+
+$OldSchema = '  filename: import_mcpBundle.z.string().optional().describe("File name to save the screenshot to. Defaults to `page-{timestamp}.{png|jpeg}` if not specified. Prefer relative file names to stay within the output directory."),'
+$NewSchema = ''
+$OldSchema = $OldSchema -replace "`r`n", "`n"
+if ($Ss.Contains($OldSchema)) {
+    $Ss = $Ss.Replace($OldSchema, $NewSchema)
+    Write-Host "      Patched: screenshot schema (removed filename param)" -ForegroundColor DarkGray
+} else {
+    throw "Patch 3 failed: could not find screenshot filename schema"
+}
+
+# Also remove the file save — only keep the MCP image response
+$OldSave = @'
+    const resolvedFile = await response.resolveClientFile({ prefix: ref ? "element" : "page", ext: fileType, suggestedFilename: params.filename }, `Screenshot of ${screenshotTarget}`);
+    response.addCode(`// Screenshot ${screenshotTarget} and save it as ${resolvedFile.relativeName}`);
+    if (ref)
+      response.addCode(`await page.${ref.resolved}.screenshot(${(0, import_utils2.formatObject)({ ...options, path: resolvedFile.relativeName })});`);
+    else
+      response.addCode(`await page.screenshot(${(0, import_utils2.formatObject)({ ...options, path: resolvedFile.relativeName })});`);
+    await response.addFileResult(resolvedFile, data);
+    await response.registerImageResult(data, fileType);
+'@
+$NewSave = @'
+    await response.registerImageResult(data, fileType);
+'@
+$OldSave = $OldSave -replace "`r`n", "`n"
+$NewSave = $NewSave -replace "`r`n", "`n"
+if ($Ss.Contains($OldSave)) {
+    $Ss = $Ss.Replace($OldSave, $NewSave)
+    Write-Host "      Patched: screenshot handler (removed file save)" -ForegroundColor DarkGray
+} else {
+    throw "Patch 3b failed: could not find screenshot file save code"
+}
+
+Set-Content $SsPath $Ss -NoNewline
+
 # Clean up temp npm dir
 Remove-Item $TmpNpm -Recurse -Force
 
