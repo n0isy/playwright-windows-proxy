@@ -115,7 +115,7 @@ $NewCreate = @'
     const contexts = browser.contexts();
     if (contexts.length > 0)
       return contexts[0];
-    return browser.newContext();
+    return browser.newContext({ viewport: null });
   }
 }
 class PersistentContextFactory
