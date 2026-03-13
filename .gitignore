@@ -4,3 +4,7 @@
 .bin/wrappe.exe
 .bin/playwright-proxy.exe
 node_modules/
+.claude/
+.playwright-mcp/
+_tmp/
+*.png

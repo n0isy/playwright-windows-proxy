@@ -56,9 +56,9 @@ const START_URL = process.env.PW_START_URL || 'about:blank';
     const page = browserContext.pages()[0] || await browserContext.newPage();
     await page.goto(START_URL);
 
-    console.log(`\nMCP server ready:`);
-    console.log(`  SSE:        http://${HOST}:${MCP_PORT}/sse`);
-    console.log(`  Streamable: http://${HOST}:${MCP_PORT}/mcp`);
+    console.log(`\nMCP server ready: http://${HOST}:${MCP_PORT}/mcp`);
+    console.log(`\nClient config:`);
+    console.log(`  { "mcpServers": { "playwright": { "type": "http", "url": "http://${HOST}:${MCP_PORT}/mcp" } } }`);
     console.log('\nPress Ctrl+C to stop.');
 
     const shutdown = async () => {
