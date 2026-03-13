@@ -97,6 +97,74 @@ $PlPkg = Get-Content $PlPkgJson -Raw | ConvertFrom-Json
 $PlPkg.exports | Add-Member -NotePropertyName "./*" -NotePropertyValue "./*" -Force
 $PlPkg | ConvertTo-Json -Depth 10 | Set-Content $PlPkgJson
 
+# Patch browserContextFactory.js: reuse existing context + don't close shared remote context
+$BcfPath = Join-Path (Join-Path (Join-Path (Join-Path $PlDst "lib") "mcp") "browser") "browserContextFactory.js"
+$Bcf = Get-Content $BcfPath -Raw
+
+# Patch 1: RemoteContextFactory._doCreateContext — reuse existing context instead of newContext()
+$OldCreate = @'
+  async _doCreateContext(browser) {
+    return browser.newContext();
+  }
+}
+class PersistentContextFactory
+'@
+$NewCreate = @'
+  async _doCreateContext(browser) {
+    const contexts = browser.contexts();
+    if (contexts.length > 0)
+      return contexts[0];
+    return browser.newContext();
+  }
+}
+class PersistentContextFactory
+'@
+if ($Bcf.Contains($OldCreate)) {
+    $Bcf = $Bcf.Replace($OldCreate, $NewCreate)
+    Write-Host "      Patched: RemoteContextFactory._doCreateContext" -ForegroundColor DarkGray
+} else {
+    throw "Patch 1 failed: could not find RemoteContextFactory._doCreateContext target"
+}
+
+# Patch 2: BaseContextFactory._closeBrowserContext — don't close shared remote contexts
+$OldClose = @'
+  async _closeBrowserContext(browserContext, browser) {
+    (0, import_log.testDebug)(`close browser context (${this._logName})`);
+    if (browser.contexts().length === 1)
+      this._browserPromise = void 0;
+    await browserContext.close().catch(import_log.logUnhandledError);
+    if (browser.contexts().length === 0) {
+      (0, import_log.testDebug)(`close browser (${this._logName})`);
+      await browser.close().catch(import_log.logUnhandledError);
+    }
+  }
+'@
+$NewClose = @'
+  async _closeBrowserContext(browserContext, browser) {
+    (0, import_log.testDebug)(`close browser context (${this._logName})`);
+    if (this._logName === "remote") {
+      this._browserPromise = void 0;
+      await browser.close().catch(import_log.logUnhandledError);
+      return;
+    }
+    if (browser.contexts().length === 1)
+      this._browserPromise = void 0;
+    await browserContext.close().catch(import_log.logUnhandledError);
+    if (browser.contexts().length === 0) {
+      (0, import_log.testDebug)(`close browser (${this._logName})`);
+      await browser.close().catch(import_log.logUnhandledError);
+    }
+  }
+'@
+if ($Bcf.Contains($OldClose)) {
+    $Bcf = $Bcf.Replace($OldClose, $NewClose)
+    Write-Host "      Patched: BaseContextFactory._closeBrowserContext" -ForegroundColor DarkGray
+} else {
+    throw "Patch 2 failed: could not find BaseContextFactory._closeBrowserContext target"
+}
+
+Set-Content $BcfPath $Bcf -NoNewline
+
 # Clean up temp npm dir
 Remove-Item $TmpNpm -Recurse -Force
 

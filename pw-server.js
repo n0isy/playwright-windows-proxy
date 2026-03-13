@@ -5,7 +5,6 @@ const playwrightCore = require(path.join(__dirname, 'package'));
 
 // MCP modules — use direct paths to bypass package.json exports restrictions
 const mcpDir = path.join(__dirname, 'node_modules', 'playwright', 'lib', 'mcp');
-const { createConnection } = require(path.join(mcpDir, 'index'));
 const { start } = require(path.join(mcpDir, 'sdk', 'server'));
 const { resolveConfig } = require(path.join(mcpDir, 'browser', 'config'));
 const { contextFactory } = require(path.join(mcpDir, 'browser', 'browserContextFactory'));
@@ -32,19 +31,12 @@ const START_URL = process.env.PW_START_URL || 'about:blank';
     const ws = server.wsEndpoint();
     console.log('Browser WS:', ws);
 
-    // 2. Open a visible startup page
-    const browser = await playwrightCore.chromium.connect(ws);
-    const context = await browser.newContext();
-    const page = await context.newPage();
-    await page.goto(START_URL);
-
-    // 3. Build MCP backend that connects to our browser
+    // 2. Configure MCP to connect to our browser
     const config = await resolveConfig({
       browser: { remoteEndpoint: ws },
       sharedBrowserContext: true,
     });
     const factory = contextFactory(config);
-
     const packageJSON = require(path.join(__dirname, 'node_modules', 'playwright', 'package.json'));
 
     const serverBackendFactory = {
@@ -54,8 +46,15 @@ const START_URL = process.env.PW_START_URL || 'about:blank';
       create: () => new BrowserServerBackend(config, factory),
     };
 
-    // 4. Start MCP HTTP server (SSE + Streamable HTTP)
+    // 3. Start MCP HTTP server (SSE + Streamable HTTP)
     await start(serverBackendFactory, { port: MCP_PORT, host: HOST });
+
+    // 4. Eagerly obtain browser in MCP context — opens the session now
+    const { browserContext, close } = await factory.createContext(
+      { name: 'playwright-proxy', version: '1.0' }
+    );
+    const page = browserContext.pages()[0] || await browserContext.newPage();
+    await page.goto(START_URL);
 
     console.log(`\nMCP server ready:`);
     console.log(`  SSE:        http://${HOST}:${MCP_PORT}/sse`);
