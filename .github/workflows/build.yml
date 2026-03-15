@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   build:
+    if: github.repository == 'n0isy/playwright-windows-proxy'
     runs-on: windows-latest
     env:
       TAG: ${{ inputs.tag || github.ref_name }}

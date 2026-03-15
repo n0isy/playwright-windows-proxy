@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   check:
+    if: github.repository == 'n0isy/playwright-windows-proxy'
     runs-on: ubuntu-latest
     outputs:
       tag: ${{ steps.compare.outputs.tag }}
@@ -86,7 +87,7 @@ jobs:
 
   build:
     needs: check
-    if: needs.check.outputs.tag != ''
+    if: github.repository == 'n0isy/playwright-windows-proxy' && needs.check.outputs.tag != ''
     uses: ./.github/workflows/build.yml
     with:
       tag: ${{ needs.check.outputs.tag }}
